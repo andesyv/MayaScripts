@@ -1,3 +1,4 @@
+# Python script
 import maya.cmds as cmd
 
 if cmd.window("clothCleanup", ex=True):
