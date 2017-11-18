@@ -15,6 +15,7 @@ cmd.showWindow("clothCleanup")
 def cleanup():
     selection = cmd.ls(sl=True)
     print(selection)
+    # deletes history and clears
     cmd.delete(selection, ch=True)
     cmd.makeIdentity(selection, apply=True, jointOrient=True, rotate=True, translate=True, scale=True)
     cmd.delete("nCloth*")
