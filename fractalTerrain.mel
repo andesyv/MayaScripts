@@ -1,0 +1,115 @@
+window -title "Make fractal terrain" -rtf true controlWindow;
+
+columnLayout -rowSpacing 10;
+intSliderGrp -label "Iterations" -minValue 1 -maxValue 10 -field true iterations;
+floatSliderGrp -label "Random multiplier" -minValue 0 -maxValue 5 -field true randomMultiplier;
+button -label "Apply" -c "fractalize";
+
+showWindow controlWindow;
+
+global proc fractalize() {
+    int $iterations = intSliderGrp("-q", "-value", "iterations");
+    float $randomMultiplier = floatSliderGrp("-q", "-value", "randomMultiplier");
+
+    for ($scriptIteration = 1; $scriptIteration <= $iterations && $iterations > 0; $scriptIteration++) {
+
+        // Huge tip! "filterExpand" it makes the arrays real arrays!
+
+        string $oldVertices[] = polyListComponentConversion("-ff", "-tv", filterExpand("-sm", 34, "-ex", true, ls("-sl")));
+        int $verticesBeforeSubdiv[] = polyEvaluate("-vertex");
+
+        int $loopIterations = 0;
+        {
+            int $temp[] = polyEvaluate("-fc");
+            $loopIterations = $temp[0];
+        }
+
+        // Here is the subdivision part. This is where things gets complicated.
+        polySubdivideFacet -divisions 1 -mode 0;
+        string $endSelection[] = ls("-sl");
+
+        int $lastLoopIterationsFaces = 0;
+        string $vertices[] = filterExpand("-sm", 31, "-ex", true, polyListComponentConversion("-ff", "-tv"));
+
+
+        // size (filterExpand("-sm", 34, "-ex", true, ls("-sl")));
+        for ($currentIteration = 0; $currentIteration < $loopIterations; $currentIteration++) {
+            // string $oldFaces[] = filterExpand("-sm", 34, "-ex", true, ls("-sl"));
+
+
+
+            // Select mid-subdivided point and find normal.
+            select -r (findName($oldVertices) + ".vtx[" + ($verticesBeforeSubdiv[0] + $lastLoopIterationsFaces) + "]");
+
+            string $faces[] = filterExpand("-sm", 34, "-ex", true, polyListComponentConversion("-fv", "-tf"));
+            string $pInfo[] = polyInfo("-fn", $faces);
+            vector $normal = << 0, 0, 0 >>;
+            for ($info in $pInfo) {
+                $normal += translatePolyInfoNormal($info);
+            }
+            $normal /= size($pInfo);
+
+            // Move mid-subdivided point a random amount outwards.
+            float $currentRandom = rand($randomMultiplier);
+            move("-r", $normal.x * $currentRandom, $normal.y * $currentRandom, $normal.z * $currentRandom);
+
+            for ($i = 1; $i <= size($faces); $i++) {
+                $currentRandom = rand($randomMultiplier/2);
+                select("-r", findName($oldVertices) + ".vtx[" + ($verticesBeforeSubdiv[0] + $lastLoopIterationsFaces + $i) + "]");
+                move("-r", $normal.x * $currentRandom, $normal.y * $currentRandom, $normal.z * $currentRandom);
+            }
+            $lastLoopIterationsFaces += size($faces) + 1;
+        }
+        select -r $endSelection;
+        $randomMultiplier /= 2;
+    }
+}
+
+// Good code that finds the name of the object. Works with names that are composed with . in their names,
+// although after writing the code I found out that Maya forbids you from writing names with . in their names anyway..
+global proc string findName(string $componentArray[]) {
+    string $tempArray[] = stringToStringArray($componentArray[0], "."); // This is actually all you need to do, because names can't have .'s in them.
+    int $sizeOfArray = size($tempArray);
+    string $result = "";
+    if ($sizeOfArray > 2) {
+        for ($i = 2; $i <= $sizeOfArray; $i++) {
+            if (match("\\[", $tempArray[$sizeOfArray - $i]) == "[" || match("\\]", $tempArray[$sizeOfArray - $i]) == "]") {
+                continue;
+            } else {
+                $result = ($result == "") ? $tempArray[$sizeOfArray - $i] : $tempArray[$sizeOfArray - $i] + "." + $result;
+            }
+        }
+    } else {
+        $result = $tempArray[0];
+    }
+    return $result;
+}
+
+// Copied from http://ewertb.soundlinker.com/mel/mel.005.php
+global proc vector translatePolyInfoNormal( string $pin )
+{
+  vector $normal;
+  float $x;
+  float $y;
+  float $z;
+
+  string $tokens[];
+  int $numTokens = `tokenize $pin " " $tokens`;
+
+  // Make sure we're looking at polyInfo data:
+  if ( ( $numTokens > 3 ) && ( $tokens[0] == "FACE_NORMAL" ) )
+  {
+    // Maya performs data-type conversion here.
+    $x = ($tokens[$numTokens-3]);
+    $y = ($tokens[$numTokens-2]);
+    $z = ($tokens[$numTokens-1]);
+
+    $normal = << $x, $y, $z >>;
+
+    // Normalize it.
+    $normal = `unit $normal`;
+  }
+
+  // Return it.
+  return $normal;
+}
